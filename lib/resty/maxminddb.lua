@@ -11,7 +11,7 @@
 	See the License for the specific language governing permissions and
 	limitations under the License.
 ]]
-
+-- edit
 -- copy from https://github.com/lilien1010/lua-resty-maxminddb/blob/f96633e2428f8f7bcc1e2a7a28b747b33233a8db/resty/maxminddb.lua#L5-L12
 
 local ffi                 = require ('ffi')
