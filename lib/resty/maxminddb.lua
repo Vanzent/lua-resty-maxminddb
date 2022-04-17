@@ -318,7 +318,7 @@ local function _dump_entry_data_list(entry_data_list,status)
   return entry_data_list,status,result
 end
 --asn
-function _M.lookup(ip)
+function _M.lookup_asn(ip)
 
   if not initted then
       return nil, "not initialized"
@@ -363,7 +363,7 @@ function _M.lookup(ip)
 end
 
 --country
-function _M.lookup(ip)
+function _M.lookup_country(ip)
 
   if not initted then
       return nil, "not initialized"
