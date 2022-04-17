@@ -11,7 +11,7 @@
 	See the License for the specific language governing permissions and
 	limitations under the License.
 ]]
--- edit
+
 -- copy from https://github.com/lilien1010/lua-resty-maxminddb/blob/f96633e2428f8f7bcc1e2a7a28b747b33233a8db/resty/maxminddb.lua#L5-L12
 
 local ffi                 = require ('ffi')
@@ -164,7 +164,8 @@ local MMDB_DATA_TYPE_FLOAT                          =   15
 -- you should install the libmaxminddb to your system
 local maxm                                          = ffi.load('libmaxminddb')
 --https://github.com/maxmind/libmaxminddb
-local mmdb                                          = ffi_new('MMDB_s')
+local mmdb_asn                                      = ffi_new('MMDB_s')
+local mmdb_country                                  = ffi_new('MMDB_s')
 local initted                                       = false
 
 local function mmdb_strerror(rc)
@@ -175,17 +176,22 @@ local function gai_strerror(rc)
     return ffi_str(C.gai_strerror(rc))
 end
 
-function _M.init(dbfile)
+function _M.init(dbfile_asn,dbfile_country)
   if not initted then
-    local maxmind_ready   = maxm.MMDB_open(dbfile,0,mmdb)
+    local maxmind_ready_asn   = maxm.MMDB_open(dbfile_asn,0,mmdb_asn)
+    local maxmind_ready_country   = maxm.MMDB_open(dbfile_country,0,mmdb_country)
 
-    if maxmind_ready ~= MMDB_SUCCESS then
-        return nil, mmdb_strerror(maxmind_ready)
+    if maxmind_ready_asn ~= MMDB_SUCCESS then
+        return nil, mmdb_strerror(maxmind_ready_asn)
+    end
+    if maxmind_ready_country ~= MMDB_SUCCESS then
+        return nil, mmdb_strerror(maxmind_ready_country)
     end
 
     initted = true
 
-    ffi_gc(mmdb, maxm.MMDB_close)
+    ffi_gc(mmdb_asn, maxm.MMDB_close)
+    ffi_gc(mmdb_country, maxm.MMDB_close)
   end
   return initted
 end
@@ -311,7 +317,7 @@ local function _dump_entry_data_list(entry_data_list,status)
   status = MMDB_SUCCESS
   return entry_data_list,status,result
 end
-
+--asn
 function _M.lookup(ip)
 
   if not initted then
@@ -322,7 +328,7 @@ function _M.lookup(ip)
   local gai_error = ffi_new('int[1]')
   local mmdb_error = ffi_new('int[1]')
 
-  local result = maxm.MMDB_lookup_string(mmdb,ip,gai_error,mmdb_error)
+  local result = maxm.MMDB_lookup_string(mmdb_asn,ip,gai_error,mmdb_error)
 
   if mmdb_error[0] ~= MMDB_SUCCESS then
     return nil,'lookup failed: ' .. mmdb_strerror(mmdb_error[0])
@@ -356,6 +362,50 @@ function _M.lookup(ip)
   return result
 end
 
+--country
+function _M.lookup(ip)
+
+  if not initted then
+      return nil, "not initialized"
+  end
+
+  -- copy from https://github.com/lilien1010/lua-resty-maxminddb/blob/f96633e2428f8f7bcc1e2a7a28b747b33233a8db/resty/maxminddb.lua#L159-L176
+  local gai_error = ffi_new('int[1]')
+  local mmdb_error = ffi_new('int[1]')
+
+  local result = maxm.MMDB_lookup_string(mmdb_country,ip,gai_error,mmdb_error)
+
+  if mmdb_error[0] ~= MMDB_SUCCESS then
+    return nil,'lookup failed: ' .. mmdb_strerror(mmdb_error[0])
+  end
+
+  if gai_error[0] ~= MMDB_SUCCESS then
+    return nil,'lookup failed: ' .. gai_strerror(gai_error[0])
+  end
+
+  if true ~= result.found_entry then
+    return nil,'not found'
+  end
+
+  local entry_data_list = ffi_cast('MMDB_entry_data_list_s **const',ffi_new("MMDB_entry_data_list_s"))
+
+  local status = maxm.MMDB_get_entry_data_list(result.entry,entry_data_list)
+
+  if status ~= MMDB_SUCCESS then
+    return nil,'get entry data failed: ' .. mmdb_strerror(status)
+  end
+
+  local head = entry_data_list[0] -- Save so this can be passed to free fn.
+  local _,status,result = _dump_entry_data_list(entry_data_list)
+  maxm.MMDB_free_entry_data_list(head)
+
+  if status ~= MMDB_SUCCESS then
+    return nil,'dump entry data failed: ' .. mmdb_strerror(status)
+  end
+
+
+  return result
+end
 -- copy from https://github.com/lilien1010/lua-resty-maxminddb/blob/master/resty/maxminddb.lua#L208
 -- https://www.maxmind.com/en/geoip2-databases  you should download  the mmdb file from maxmind
 
